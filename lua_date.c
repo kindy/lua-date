@@ -11,9 +11,12 @@
 static int days_between(lua_State *L);
 static int days_diff(lua_State *L);
 static int check(lua_State *L);
+static int format(lua_State *L);
+static int weekday(lua_State *L);
 
-static const u_char dates[102][12] =
+static const u_char dates[MAX_YEAR][12] =
 {
+    //from 2000 to 2101
     {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
     {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
     {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
@@ -122,6 +125,8 @@ static const struct luaL_Reg date[] = {
     {"days_between", days_between},
     {"days_diff", days_diff},
     {"check", check},
+    {"format", format},
+    {"weekday", weekday},
     {NULL, NULL}
 };
 
@@ -131,6 +136,46 @@ luaopen_date(lua_State *L)
 {
     luaL_register(L, "date", date);
     return 1;
+}
+
+
+char * replace( char const * const original, char const * const pattern, char const * const replacement)
+{
+    size_t const replen = strlen(replacement);
+    size_t const patlen = strlen(pattern);
+    size_t const orilen = strlen(original);
+
+    size_t patcnt = 0;
+    const char * oriptr;
+    const char * patloc;
+
+    // find how many times the pattern occurs in the original string
+    for (oriptr = original; patloc = strstr(oriptr, pattern); oriptr = patloc + patlen) {
+        patcnt++;
+    }
+
+    // allocate memory for the new string
+    size_t const retlen = orilen + patcnt * (replen - patlen);
+    char * const returned = (char *) malloc( sizeof(char) * (retlen + 1) );
+
+    if (returned != NULL)
+    {
+        // copy the original string,
+        // replacing all the instances of the pattern
+        char * retptr = returned;
+        for (oriptr = original; patloc = strstr(oriptr, pattern); oriptr = patloc + patlen) {
+            size_t const skplen = patloc - oriptr;
+            // copy the section until the occurence of the pattern
+            strncpy(retptr, oriptr, skplen);
+            retptr += skplen;
+            // copy the replacement
+            strncpy(retptr, replacement, replen);
+            retptr += replen;
+        }
+        // copy the rest of the string.
+        strcpy(retptr, oriptr);
+    }
+    return returned;
 }
 
 
@@ -194,7 +239,44 @@ diff(const char *begin, const char *end)
         }
     }
 
-    return num;
+    return num - 1;
+}
+
+
+static int
+dayofweek(const char *date)
+{
+    int days = diff("2001-01-01", date);
+    dd("diff_days: %d", days);
+    return days % 7 + 1;
+}
+
+
+static int
+format(lua_State *L)
+{
+    int              n;
+    char            *format_date;
+    char            *origin_date;
+    size_t           len_origin_date;
+
+    n = lua_gettop(L);
+
+    if (n != 1) {
+        return luaL_error(L, "expected 1 argument but got %d", n);
+    }
+
+    origin_date = (char *) luaL_checklstring(L, 1, &len_origin_date);
+
+    if (len_origin_date != 10) {
+        return 1;
+    }
+
+    format_date = replace(origin_date, "-", "");
+
+    lua_pushlstring(L, format_date, sizeof("yyyyMMdd"));
+
+    return 1;
 }
 
 
@@ -312,3 +394,35 @@ days_diff(lua_State *L)
     return 1;
 }
 
+
+static int
+weekday(lua_State *L)
+{
+    int     n;
+    int     week_index;
+    size_t  len_date;
+    char   *date;
+
+    n = lua_gettop(L);
+    if (n != 1) {
+        return luaL_error(L, "expected 1 argument but got %d", n);
+    }
+
+    date = (char *) luaL_checklstring(L, 1, &len_date);
+    dd("hello: %s", date);
+
+    if (len_date != 10) {
+        return 1;
+    }
+
+    week_index = dayofweek(date);
+
+    if (week_index == 0) {
+        lua_pushnil(L);
+        return 1;
+    }
+
+    lua_pushinteger(L, week_index);
+
+    return 1;
+}
