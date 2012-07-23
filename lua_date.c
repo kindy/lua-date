@@ -1,4 +1,4 @@
-#define DDEBUG 1
+#define DDEBUG 0
 #include "ddebug.h"
 
 #include <lua.h>
@@ -13,6 +13,8 @@ static int days_diff(lua_State *L);
 static int check(lua_State *L);
 static int format(lua_State *L);
 static int weekday(lua_State *L);
+static int date_add(lua_State *L);
+static int days_by_num(lua_State *L);
 
 static const u_char dates[MAX_YEAR][12] =
 {
@@ -127,6 +129,8 @@ static const struct luaL_Reg date[] = {
     {"check", check},
     {"format", format},
     {"weekday", weekday},
+    {"date_add", date_add},
+    {"days_by_num", days_by_num},
     {NULL, NULL}
 };
 
@@ -426,3 +430,124 @@ weekday(lua_State *L)
 
     return 1;
 }
+
+
+static int
+date_add(lua_State *L)
+{
+    int              n, i, num = 0;
+    int              y, m, d;
+    char            *begin;
+    size_t           len_begin;
+    char             buf[sizeof("2010-11-01")];
+
+    n = lua_gettop(L);
+
+    if (n != 2) {
+        return luaL_error(L, "expected 2 argument but got %d", n);
+    }
+
+    begin = (char *) luaL_checklstring(L, 1, &len_begin);
+    num   = (int) luaL_checknumber(L, 2);
+
+    dd("begin: %s", begin);
+    if (check_date(begin)) {
+        return 1;
+    }
+
+    if (len_begin != 10) {
+        return 1;
+    }
+
+    if (num > 150) {
+        return 1;
+    }
+
+    lua_createtable(L, num, 0);
+
+    y = atoi(begin);
+    m = atoi(begin + 5);
+    d = atoi(begin + 8);
+
+    for (i = 0; i < num; i++) {
+        d++;
+
+        if (d > dates[y - 2000][m - 1]) {
+            d = 1;
+            m++;
+        }
+
+        if (m > 12) {
+            m = 1;
+            d = 1;
+            y++;
+        }
+    }
+
+    sprintf(buf, "%04d-%02d-%02d", y, m, d);
+    lua_pushlstring(L, buf, 10);
+
+    return 1;
+}
+
+
+static int
+days_by_num(lua_State *L)
+{
+    int              n, i, num = 0, count = 1;
+    int              y, m, d;
+    char            *begin;
+    size_t           len_begin;
+    char             buf[sizeof("2010-11-01")];
+
+    n = lua_gettop(L);
+
+    if (n != 2) {
+        return luaL_error(L, "expected 2 argument but got %d", n);
+    }
+
+    begin = (char *) luaL_checklstring(L, 1, &len_begin);
+    num   = (int) luaL_checknumber(L, 2);
+
+    dd("begin: %s", begin);
+    if (check_date(begin)) {
+        return 1;
+    }
+
+    if (len_begin != 10) {
+        return 1;
+    }
+
+    if (num > 150) {
+        return 1;
+    }
+
+    lua_createtable(L, num, 0);
+
+    y = atoi(begin);
+    m = atoi(begin + 5);
+    d = atoi(begin + 8);
+
+    for (i = 0; i < num; i++) {
+        if (d > dates[y - 2000][m - 1]) {
+            d = 1;
+            m++;
+        }
+
+        if (m > 12) {
+            m = 1;
+            d = 1;
+            y++;
+        }
+
+        sprintf(buf, "%04d-%02d-%02d", y, m, d);
+        lua_pushlstring(L, buf, 10);
+        lua_rawseti(L, -2, count);
+
+        count++;
+        d++;
+    }
+
+    return 1;
+}
+
